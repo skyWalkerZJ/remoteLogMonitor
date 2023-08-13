@@ -1,5 +1,4 @@
 #include <iostream>
-#include <list>
 #include <sys/types.h>
 #include <sys/socket.h>
 #include <netinet/in.h>
@@ -11,17 +10,74 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/wait.h>
+#include <signal.h>
 #include <unordered_map>
 #include <unordered_set>
 using namespace std;
 #define SERVER_PORT 8888
-#define SERVER_IP "127.0.0.1"
-#define WATCH_DOG_IP "127.0.0.1"
+#define SERVER_IP "192.168.239.144"
 #define BUF_SIZE 1024
-#define MAX_CON_NUMS 5
-#define EPOLL_SIZE 5
+#define MAX_CON_NUMS 10
+#define EPOLL_SIZE 30
+string WATCHDOG_IP = "192.168.239.1";
+struct logClient{
+    int sockfd;
+    int pid;
+    string ip;
+    int port;
+};
+int sigtype = 0;
+int ifexit = 0;
+
+
+int WatchDogFd = -1;
+
+void sig_int(int signo)
+{
+	sigtype = signo;
+	ifexit = 1;
+}
+void sig_pipe(int signo)
+{
+	sigtype = signo;
+}
+void sig_chld(int signo)
+{
+	sigtype = signo;
+	pid_t pid_chld;
+	int stat;
+	while ((pid_chld = waitpid(-1, &stat, WNOHANG)) > 0);
+}
+
+int setnonblocking(int fd) {
+    int old_option = fcntl( fd, F_GETFL );
+    int new_option = old_option | O_NONBLOCK;
+    fcntl( fd, F_SETFL, new_option );
+    return old_option;
+}
 int main()
 {
+	struct sigaction sigpipe1, sigpipe2;
+	sigemptyset(&sigpipe1.sa_mask);
+	sigpipe1.sa_handler=sig_pipe;
+	sigpipe1.sa_flags=0;
+	sigpipe1.sa_flags|=SA_RESTART;
+	sigaction(SIGPIPE,&sigpipe1,&sigpipe2);
+	//注册sigchld信号处理器
+	struct sigaction sigchld1, sigchld2;
+	sigemptyset(&sigchld1.sa_mask);
+	sigchld1.sa_handler=sig_chld;
+	sigchld1.sa_flags=0;
+	sigchld1.sa_flags|=SA_RESTART;
+	sigaction(SIGCHLD, &sigchld1, &sigchld2);
+	//注册sigint信号处理器
+	struct sigaction sigint1, sigint2;
+	sigemptyset(&sigint1.sa_mask);
+	sigint1.sa_flags = 0;
+	sigint1.sa_handler = &sig_int;
+	sigaction(SIGINT, &sigint1, &sigint2);
+
     struct sockaddr_in serverAddr;
     serverAddr.sin_family = AF_INET;
     serverAddr.sin_port = htons(SERVER_PORT);
@@ -65,8 +121,7 @@ int main()
     setnonblocking(listenfd);
 
     unordered_set<int> Log_CLI_Fds;
-    int WatchDogFd = -1;
-    while(true)
+    while(!ifexit)
     {
         int epoll_event_counts = epoll_wait(epfd,events,EPOLL_SIZE,-1);
         if(epoll_event_counts < 0)
@@ -89,14 +144,14 @@ int main()
 
                 printf("get client connection from IP: %s PORT: %d\n",inet_ntoa(client_addr.sin_addr),ntohs(client_addr.sin_port));
 
-                if (WATCH_DOG_IP == inet_ntoa(client_addr.sin_addr))
+                if (WATCHDOG_IP == string(inet_ntoa(client_addr.sin_addr)))
                 {
                     WatchDogFd = clientfd;
-                    printf("get connection from log watchdog IP: %s\n",WATCH_DOG_IP);
+                    printf("get connection from log watchdog IP: %s\n",WATCHDOG_IP.data());
                     printf("start receive log from watchdog\n");
                 }else{
                     Log_CLI_Fds.emplace(clientfd);
-                    printf("A new CLI get connection,there are %d CLI Now\n",Log_CLI_Fds.size());
+                    printf("A new CLI get connection,there are %ld CLI Now\n",Log_CLI_Fds.size());
                 }
 
                 struct epoll_event ep_ev;
@@ -123,7 +178,7 @@ int main()
             {
                 //来自CLI的控制信息。解析json
                 //包括CLI的退出等操作。
-            }      
+            }
         }
     }
 }
