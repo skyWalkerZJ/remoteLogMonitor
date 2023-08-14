@@ -16,7 +16,7 @@
 #include <unordered_set>
 using namespace std;
 #define SERVER_PORT 8888
-#define SERVER_IP "192.168.239.144"
+#define SERVER_IP "127.0.0.1"
 #define BUF_SIZE 1024
 #define MAX_CON_NUMS 10
 #define EPOLL_SIZE 30
@@ -164,10 +164,11 @@ int main()
             }else if(sockfd == WatchDogFd)
             {
                 char buffer[BUF_SIZE];
+                bzero(&buffer,BUF_SIZE);
                 int len = 0; 
                 while((len=recv(sockfd,buffer,BUF_SIZE,0) > 0))
                 {
-                    for(auto iter=Log_CLI_Fds.begin(); iter!= Log_CLI_Fds.end(); iter++)
+                    for(auto iter = Log_CLI_Fds.begin(); iter!= Log_CLI_Fds.end(); iter++)
                     {
                         send(*iter,buffer,len,0);
                         printf("push log update information to %d",*iter);
@@ -178,6 +179,15 @@ int main()
             {
                 //来自CLI的控制信息。解析json
                 //包括CLI的退出等操作。
+                char buffer[BUF_SIZE];
+                bzero(&buffer,BUF_SIZE);
+                int len = -1;
+                while((len = recv(sockfd,buffer,BUF_SIZE,0)) > 0)
+                {
+                    //输入日志到控制台
+                    cout << string(buffer) << endl;
+                    printf("log:: %s\n",buffer);
+                }
             }
         }
     }

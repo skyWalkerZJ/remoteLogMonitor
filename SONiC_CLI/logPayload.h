@@ -2,6 +2,8 @@
 #include <unistd.h>
 #include <jsoncpp/json/json.h>
 #include <jsoncpp/json/writer.h>
+//#include <json/json.h>
+//#include <json/writer.h>
 #include <iostream>
 using namespace std;
 using namespace Json;
@@ -11,16 +13,18 @@ private:
     int pid;
     string timestamp;
     int type;
-    string log;
+    string data;
     string instruction;
 public:
+    LogPayload()
+    {
+        this->pid = getpid();
+        this->user = "root";
+        this->timestamp = "11:11:11";
+    }
     void setUser(string user)
     {
         this->user = user;
-    }
-    void setPid(int pid)
-    {
-        this->pid = pid;
     }
     void setTimeStamp(string timestamp)
     {
@@ -30,9 +34,9 @@ public:
     {
         this->type = type;
     }
-    void setLog(string log)
+    void setLog(string data)
     {
-        this->log = log;
+        this->data = data;
     }
     void setInstruction(string instruction)
     {
@@ -45,7 +49,7 @@ public:
     }
     int getPid()
     {
-        return this->pid;
+        return getpid();
     }
 
     string getTimeStamp()
@@ -56,9 +60,9 @@ public:
     {
         return this->type;
     }
-    string getLog()
+    string getData()
     {
-        return this->log;
+        return this->data;
     }
     string getInstruction()
     {
@@ -68,26 +72,35 @@ public:
     string toJsonString()
     {
         Value root;
-        root["pid"] = pid;
+        root["pid"] = getpid();
         root["TimeStamp"] = "11:11";
-        root["user"] = "zhangsan";
-        root["type"] = 1;//1 == control
-        root["instruction"] = "exit";
-
+        root["user"] = this->user;
+        root["type"] = this->type;//1 == control
+        root["instruction"] = this->instruction;
+        root["data"] = this->data;
         FastWriter writer;
         string json_file = writer.write(root);
-
         return json_file;
     }
 
-    void parseJsonToClass()
+    LogPayload* parseJsonToClass(string srcJson)
     {
-        
+        Reader reader;
+        Value root;
+        reader.parse(srcJson,root);
+        this->user = root["user"].asString();
+        this->type = root["type"].asInt();
+        this->timestamp = root["timestamp"].asString();         
+        this->instruction = root["instruction"].asString();
+        this->data = root["data"].asString();
+        return this;
     }
 };
+/*
 int main()
 {
     LogPayload* lp = new LogPayload();
-    cout << lp->toJsonString();
+    lp->parseJsonToClass(lp->toJsonString());
     return 0;
 }
+*/
