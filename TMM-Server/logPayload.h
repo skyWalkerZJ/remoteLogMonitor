@@ -2,8 +2,6 @@
 #include <unistd.h>
 #include <jsoncpp/json/json.h>
 #include <jsoncpp/json/writer.h>
-//#include <json/json.h>
-//#include <json/writer.h>
 #include <iostream>
 using namespace std;
 using namespace Json;
@@ -42,7 +40,10 @@ public:
     {
         this->instruction = instruction;
     }
-
+    void setData(string data)
+    {
+        this->data = data;
+    }
     string getUser()
     {
         return this->user;
