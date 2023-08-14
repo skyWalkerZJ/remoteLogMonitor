@@ -14,6 +14,7 @@
 #include <signal.h>
 #include <unordered_map>
 #include <unordered_set>
+#include "logPayload.h"
 using namespace std;
 #define SERVER_PORT 8888
 #define SERVER_IP "127.0.0.1"
@@ -121,6 +122,7 @@ int main()
     setnonblocking(listenfd);
 
     unordered_set<int> Log_CLI_Fds;
+    unordered_map<int,LogPayload*> LogCLIs;
     while(!ifexit)
     {
         int epoll_event_counts = epoll_wait(epfd,events,EPOLL_SIZE,-1);
@@ -165,28 +167,45 @@ int main()
             {
                 char buffer[BUF_SIZE];
                 bzero(&buffer,BUF_SIZE);
-                int len = 0; 
-                while((len=recv(sockfd,buffer,BUF_SIZE,0) > 0))
+                int len = 0;int readed;
+                string log;
+                while((readed = recv(sockfd,buffer,BUF_SIZE,0) > 0))
                 {
-                    for(auto iter = Log_CLI_Fds.begin(); iter!= Log_CLI_Fds.end(); iter++)
-                    {
-                        send(*iter,buffer,len,0);
-                        printf("push log update information to %d",*iter);
-                    }
+                    len += readed;
+                    log += string(buffer);   
                 }
-                //来自watchdog的日志信息。遍历Log_CLI_Fds，分发日志。
+                for(auto iter = Log_CLI_Fds.begin(); iter!= Log_CLI_Fds.end(); iter++)
+                {
+                    //封装为json再发送
+                    LogPayload* payload = new LogPayload();
+                    payload->setData(log);
+                    send(*iter,payload->toJsonString().data(),payload->toJsonString().size(),0);
+                    printf("push log update information to %d",*iter);
+                }
             }else if(Log_CLI_Fds.count(sockfd) > 0)
             {
                 //来自CLI的控制信息。解析json
                 //包括CLI的退出等操作。
                 char buffer[BUF_SIZE];
                 bzero(&buffer,BUF_SIZE);
-                int len = -1;
+                int len = -1;string jsonFromCLI;
                 while((len = recv(sockfd,buffer,BUF_SIZE,0)) > 0)
                 {
-                    //输入日志到控制台
-                    cout << string(buffer) << endl;
-                    printf("log:: %s\n",buffer);
+                    jsonFromCLI += string(buffer);
+                }
+                LogPayload* payload = new LogPayload();
+                payload->parseJsonToClass(jsonFromCLI);
+                if(payload->getInstruction() == "exit")
+                {
+                    LogCLIs.erase(sockfd);
+                    //解除epoll注册
+                    close(sockfd);
+                }else if(payload->getInstruction() == "terminal logging")
+                {
+                    LogCLIs.emplace(sockfd,payload);
+                }else if(payload->getInstruction() == "show terminal logging")
+                {
+                       
                 }
             }
         }

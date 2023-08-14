@@ -124,6 +124,9 @@ int main()
         close(pipe_fd[1]);
     }else{
         close(pipe_fd[1]);
+        
+        LogPayload* payload = new LogPayload();
+
         while(!ifexit)
         {
             int epoll_event_counts = epoll_wait(epfd,events,EPOLL_SIZE,-1);
@@ -152,7 +155,7 @@ int main()
                         //输入日志到控制台
                         data += string(buffer);
                     }
-                    LogPayload payload;
+                    
                     payload.parseJsonToClass(data);
                     cout << payload.getData() << endl;
                 }else if(sockfd == pipe_fd[0])
@@ -160,19 +163,13 @@ int main()
                     //来自CLI的控制信息，需要发送到TMM-server
 
                     int res = read(sockfd,buffer,BUF_SIZE);
-                    /*
-                    1. exit
-                    2. show terminal logging server
-                    3. 构建json，构造特定的payload，包含user、pid、ip、port、报文类型、指令、日志信息、timestamp
-                    */
 
                     if(res == 0){
                         printf("read control message from pipe failed!\n");
                         ifexit = 1;
-                    }else{
-                        
+                    }else{                        
                         string instruction = string(buffer);
-                        printf("收到来自子进程的消息!");
+                        printf("收到来自子进程的消息!\n");
                         cout << instruction << endl;
                         if(instruction == "terminal logging")
                         {
@@ -194,8 +191,7 @@ int main()
 
                                 addFdToEpoll(epfd,connfd);
                                 ifconnected = 1;
-
-                                LogPayload payload;
+                                
                                 payload.setType(1);//control
                                 payload.setInstruction(instruction);
                                 send(connfd,payload.toJsonString().data(),BUF_SIZE,0);             
@@ -204,12 +200,13 @@ int main()
                             }
                         }else if(instruction == "exit")
                         {
-                            LogPayload payload;
+                            
                             payload.setType(1);//control
                             payload.setInstruction(instruction);
                             send(connfd,payload.toJsonString().data(),BUF_SIZE,0);
                             
-                            close(connfd);  
+                            delete payload;
+                            
                             ifexit = 1;
                         }
                     }
